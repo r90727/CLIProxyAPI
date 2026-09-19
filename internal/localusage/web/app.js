@@ -1,5 +1,8 @@
 const $ = id => document.getElementById(id);
 const full = (n = 0) => Number(n).toLocaleString();
+const money = (value = 0) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: value > 0 && value < .01 ? 4 : 2 }).format(value);
+const costText = (c = {}) => c.unpriced_events && !c.priced_events ? 'Unpriced' : money(c.usd) + (c.unpriced_events ? ' + unpriced' : '');
+const costDetail = (c = {}) => c.unpriced_events && !c.priced_events ? 'No estimate available for these records.' : 'Input ' + money(c.input_usd) + ' \u00b7 cache reads ' + money(c.cache_read_usd) + ' \u00b7 cache writes ' + money(c.cache_write_usd) + ' \u00b7 output ' + money(c.output_usd);
 const compact = (n = 0) => Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 2 }).format(n);
 const query = () => new URLSearchParams(['source', 'from', 'to'].map(k => [k, $(k).value]));
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
@@ -99,7 +102,7 @@ async function refreshQuotas() {
 function empty(node, message = 'No recorded usage in this range.') { node.replaceChildren(el('p', 'empty', message)); }
 function rows(id, data) {
   const node = $(id); node.replaceChildren(); if (!data.length) return empty(node);
-  for (const v of data) { const row = el('div', 'row'), name = el('span', '', v.name || 'Unknown'); name.title = name.textContent; row.append(name, el('strong', '', full(v.total))); node.append(row); }
+  for (const v of data) { const row = el('div', 'row'), name = el('span', '', v.name || 'Unknown'); name.title = name.textContent; const amounts = el('div', 'row-amounts'); amounts.append(el('strong', '', costText(v.cost)), el('small', '', full(v.total) + ' tokens')); amounts.title = costDetail(v.cost); row.append(name, amounts); node.append(row); }
 }
 async function refresh() {
   const version = ++requestVersion;
@@ -108,6 +111,12 @@ async function refresh() {
     const response = await fetch('/api/summary?' + params); if (!response.ok) throw new Error(await response.text());
     const d = await response.json(); if (version !== requestVersion) return;
     const t = d.total[0] || {};
+    $('cost').textContent = costText(t.cost);
+    $('cost-coverage').textContent = t.cost?.unpriced_events ? full(t.cost.unpriced_events) + ' records unpriced \u00b7 partial estimate' : 'API-equivalent value of recorded usage';
+    $('cost-breakdown').replaceChildren(...[['Uncached input', 'input_usd'], ['Cache reads', 'cache_read_usd'], ['Cache writes', 'cache_write_usd'], ['Output', 'output_usd']].map(([label, key]) => { const item = el('div'); item.append(el('span', '', label), el('strong', '', t.cost?.unpriced_events && !t.cost?.priced_events ? '\u2014' : money(t.cost?.[key]))); return item; }));
+    $('rates-checked').textContent = d.pricing.checked;
+    $('rates').replaceChildren();
+    for (const [model, r] of Object.entries(d.pricing.rates).sort(([a], [b]) => a.localeCompare(b))) { const tr = el('tr'); tr.append(el('td', '', model)); for (const key of ['input', 'cached', 'cache_write', 'output']) tr.append(el('td', '', '$' + r[key])); $('rates').append(tr); }
     for (const k of ['total', 'input', 'output', 'cached']) { $(k).textContent = compact(t[k]); $(k).title = full(t[k]); }
     $('records').textContent = full(t.events) + ' usage records';
     $('reasoning').textContent = full(t.reasoning) + ' reasoning tokens included';
@@ -116,11 +125,11 @@ async function refresh() {
     showError(d.status.error ? 'Import needs attention: ' + d.status.error : '');
     for (const group of ['providers', 'projects', 'threads']) rows(group, d[group]);
     $('models').replaceChildren();
-    for (const m of d.models) { const tr = el('tr'); for (const key of ['name', 'input', 'output', 'cached', 'cache_write', 'reasoning', 'total']) tr.append(el('td', '', key === 'name' ? m[key] || 'Unknown' : full(m[key]))); $('models').append(tr); }
-    if (!d.models.length) { const tr = el('tr'), td = el('td', '', 'No recorded usage in this range.'); td.colSpan = 7; tr.append(td); $('models').append(tr); }
+    for (const m of d.models) { const tr = el('tr'); for (const key of ['name', 'input', 'output', 'cached', 'cache_write', 'reasoning', 'total']) tr.append(el('td', '', key === 'name' ? m[key] || 'Unknown' : full(m[key]))); const cost = el('td', '', costText(m.cost)); cost.title = costDetail(m.cost); tr.append(cost); $('models').append(tr); }
+    if (!d.models.length) { const tr = el('tr'), td = el('td', '', 'No recorded usage in this range.'); td.colSpan = 8; tr.append(td); $('models').append(tr); }
     const days = d.days.sort((a, b) => a.name.localeCompare(b.name)).slice(-30), highest = Math.max(1, ...days.map(d => d.total));
     $('chart').replaceChildren(); $('chart-labels').replaceChildren();
-    for (const day of days) { const bar = el('div', 'bar'); bar.style.height = Math.max(2, 100 * day.total / highest) + '%'; bar.title = day.name + ': ' + full(day.total) + ' tokens'; bar.setAttribute('aria-label', bar.title); $('chart').append(bar); }
+    for (const day of days) { const bar = el('div', 'bar'); bar.style.height = Math.max(2, 100 * day.total / highest) + '%'; bar.title = day.name + ': ' + full(day.total) + ' tokens \u00b7 ' + costText(day.cost); bar.setAttribute('aria-label', bar.title); $('chart').append(bar); }
     if (!days.length) empty($('chart'));
     for (const day of [days[0], days.at(-1)].filter(Boolean)) $('chart-labels').append(el('span', '', day.name));
   } catch (error) { if (version === requestVersion) { showError('Could not refresh usage: ' + error.message); $('status').textContent = 'Disconnected'; } }

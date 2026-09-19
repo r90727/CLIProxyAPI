@@ -121,3 +121,26 @@ go test ./internal/localusage ./sdk/cliproxy/usage
 go build -o bin/t3-usage.exe ./cmd/t3-usage
 go build -o bin/cli-proxy-api.exe ./cmd/server
 ```
+
+## Estimated API cost
+
+Dashboard and Token Usage show a USD API-equivalent estimate for the selected
+source and UTC date range, with input/cache/output breakdowns and costs by model,
+provider, project, thread, and day (chart tooltips). CSV exports include an estimate
+per event, pricing status, and the rate verification date. Open **API rates & estimate
+assumptions** to inspect the embedded rate table and provider source links.
+
+Rates were checked on 2026-09-18 against
+[OpenAI](https://developers.openai.com/api/docs/pricing) and
+[Anthropic](https://platform.claude.com/docs/en/about-claude/pricing).
+Estimates apply current standard short-context prices to all retained history,
+assume 5-minute cache writes, and exclude long-context/fast-mode/regional premiums,
+batch discounts, tools, and taxes. The ledger does not retain cache lifetime or
+service tier. This estimates API token value, not subscription charges or an invoice.
+
+Uncached input = input minus cache reads and writes. Each cache category has its
+own rate; reasoning is included in output and never billed twice. Unknown models
+are visibly unpriced, with partial totals clearly labeled. Exact model names and
+dated variants are supported; arbitrary aliases are not guessed. Rates live in
+`internal/localusage/pricing.go`; updating them recalculates all estimates without
+modifying the token ledger. They are versioned with the app, not refreshed online.

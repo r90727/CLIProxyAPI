@@ -78,7 +78,7 @@ func Handler(s *Store, importer *Importer, addr string, services ...*AccountQuot
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		result := map[string]any{"status": importer.Status(), "source": f.Source, "from": f.From, "to": f.To}
+		result := map[string]any{"pricing": map[string]any{"checked": pricingChecked, "rates": apiRates, "currency": "USD"}, "status": importer.Status(), "source": f.Source, "from": f.From, "to": f.To}
 		for _, group := range []string{"total", "models", "providers", "days", "projects", "threads"} {
 			v, err := s.Aggregate(r.Context(), f, group)
 			if err != nil {
@@ -117,7 +117,7 @@ func Handler(s *Store, importer *Importer, addr string, services ...*AccountQuot
 		w.Header().Set("Content-Disposition", `attachment; filename="t3-token-usage.csv"`)
 		writer := csv.NewWriter(w)
 		defer writer.Flush()
-		_ = writer.Write([]string{"timestamp_utc", "source", "provider", "model", "project", "thread", "session", "input", "output", "cache_read", "cache_write", "reasoning", "total", "failed"})
+		_ = writer.Write([]string{"timestamp_utc", "source", "provider", "model", "project", "thread", "session", "input", "output", "cache_read", "cache_write", "reasoning", "total", "failed", "estimated_api_cost_usd", "pricing_status", "rates_checked"})
 		for rows.Next() {
 			values := make([]string, 14)
 			dest := make([]any, 14)
@@ -127,6 +127,18 @@ func Handler(s *Store, importer *Importer, addr string, services ...*AccountQuot
 			if rows.Scan(dest...) != nil {
 				return
 			}
+			v := Totals{Events: 1}
+			v.Input, _ = strconv.ParseInt(values[7], 10, 64)
+			v.Output, _ = strconv.ParseInt(values[8], 10, 64)
+			v.Cached, _ = strconv.ParseInt(values[9], 10, 64)
+			v.CacheWrite, _ = strconv.ParseInt(values[10], 10, 64)
+			cost := estimateCost(values[3], v)
+			amount, status := "", "unpriced"
+			if cost.PricedEvents > 0 {
+				amount = strconv.FormatFloat(cost.USD, 'f', 8, 64)
+				status = "estimated"
+			}
+			values = append(values, amount, status, pricingChecked)
 			for n := range values {
 				values[n] = csvSafe(values[n])
 			}

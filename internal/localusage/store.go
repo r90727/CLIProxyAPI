@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -100,15 +101,16 @@ reasoning=MAX(reasoning,excluded.reasoning),total=MAX(total,excluded.total),fail
 func (s *Store) Put(ctx context.Context, e Event) error { return putEvent(ctx, s.db, e) }
 
 type Totals struct {
-	Name       string `json:"name"`
-	Events     int64  `json:"events"`
-	Input      int64  `json:"input"`
-	Output     int64  `json:"output"`
-	Cached     int64  `json:"cached"`
-	CacheWrite int64  `json:"cache_write"`
-	Reasoning  int64  `json:"reasoning"`
-	Total      int64  `json:"total"`
-	Failed     int64  `json:"failed"`
+	Cost       CostEstimate `json:"cost"`
+	Name       string       `json:"name"`
+	Events     int64        `json:"events"`
+	Input      int64        `json:"input"`
+	Output     int64        `json:"output"`
+	Cached     int64        `json:"cached"`
+	CacheWrite int64        `json:"cache_write"`
+	Reasoning  int64        `json:"reasoning"`
+	Total      int64        `json:"total"`
+	Failed     int64        `json:"failed"`
 }
 
 type Filter struct{ Source, From, To string }
@@ -128,18 +130,41 @@ func (s *Store) Aggregate(ctx context.Context, f Filter, group string) ([]Totals
 		return nil, fmt.Errorf("invalid group")
 	}
 	where, args := f.where()
-	rows, err := s.db.QueryContext(ctx, `SELECT `+expr+`,COUNT(*),COALESCE(SUM(e.input),0),COALESCE(SUM(e.output),0),COALESCE(SUM(e.cached),0),COALESCE(SUM(e.cache_write),0),COALESCE(SUM(e.reasoning),0),COALESCE(SUM(e.total),0),COALESCE(SUM(e.failed),0) FROM usage_events e LEFT JOIN sessions s ON e.session=s.session WHERE `+where+` GROUP BY `+expr+` ORDER BY SUM(e.total) DESC`, args...)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+expr+`,e.model,COUNT(*),COALESCE(SUM(e.input),0),COALESCE(SUM(e.output),0),COALESCE(SUM(e.cached),0),COALESCE(SUM(e.cache_write),0),COALESCE(SUM(e.reasoning),0),COALESCE(SUM(e.total),0),COALESCE(SUM(e.failed),0) FROM usage_events e LEFT JOIN sessions s ON e.session=s.session WHERE `+where+` GROUP BY `+expr+`,e.model,(e.cached+e.cache_write>e.input) ORDER BY SUM(e.total) DESC`, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 	result := []Totals{}
+	indices := map[string]int{}
 	for rows.Next() {
 		var v Totals
-		if err = rows.Scan(&v.Name, &v.Events, &v.Input, &v.Output, &v.Cached, &v.CacheWrite, &v.Reasoning, &v.Total, &v.Failed); err != nil {
+		var model string
+		if err = rows.Scan(&v.Name, &model, &v.Events, &v.Input, &v.Output, &v.Cached, &v.CacheWrite, &v.Reasoning, &v.Total, &v.Failed); err != nil {
 			return nil, err
 		}
-		result = append(result, v)
+		v.Cost = estimateCost(model, v)
+		if index, exists := indices[v.Name]; exists {
+			target := &result[index]
+			target.Events += v.Events
+			target.Input += v.Input
+			target.Output += v.Output
+			target.Cached += v.Cached
+			target.CacheWrite += v.CacheWrite
+			target.Reasoning += v.Reasoning
+			target.Total += v.Total
+			target.Failed += v.Failed
+			target.Cost.add(v.Cost)
+		} else {
+			indices[v.Name] = len(result)
+			result = append(result, v)
+		}
 	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Total == result[j].Total {
+			return result[i].Name < result[j].Name
+		}
+		return result[i].Total > result[j].Total
+	})
 	return result, rows.Err()
 }
