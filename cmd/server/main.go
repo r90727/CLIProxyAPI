@@ -25,6 +25,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/homeplugins"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/localusage"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/logging"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/managementasset"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/misc"
@@ -71,6 +72,10 @@ func shouldEnableExampleAPIKeySafeMode(cfg *config.Config, commandMode, tuiMode,
 // It parses command-line flags, loads configuration, and starts the appropriate
 // service based on the provided flags (login, codex-login, or server mode).
 func main() {
+	if err := localusage.RegisterFromEnv(); err != nil {
+		log.WithError(err).Error("cannot initialize local usage ledger")
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "discover" {
 		discoverFlags := flag.NewFlagSet("discover", flag.ExitOnError)
 		timeoutSec := discoverFlags.Int("timeout", 3, "Discovery timeout in seconds")

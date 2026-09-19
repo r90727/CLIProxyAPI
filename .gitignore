@@ -6,6 +6,11 @@ cli-proxy-api
 config.yaml
 .env
 
+# Local T3 usage ledger
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
 # Generated content
 bin/*
 /logs
