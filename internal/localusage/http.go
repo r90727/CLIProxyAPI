@@ -17,8 +17,59 @@ import (
 //go:embed web/*
 var assets embed.FS
 
-func Handler(s *Store, importer *Importer, addr string) http.Handler {
+func Handler(s *Store, importer *Importer, addr string, services ...*AccountQuotaService) http.Handler {
 	mux := http.NewServeMux()
+	var claude, codex *AccountQuotaService
+	for _, service := range services {
+		if service == nil {
+			continue
+		}
+		if service.provider == "claude" {
+			claude = service
+		}
+		if service.provider == "codex" {
+			codex = service
+		}
+	}
+	mux.HandleFunc("/api/quotas", func(w http.ResponseWriter, r *http.Request) {
+		claudeAccount := AccountQuota{ID: "claude-local", Provider: "claude", Label: "claude-local", Plan: "Claude", Windows: []LimitWindow{}, Error: "Claude quota collection is not configured."}
+		if claude != nil {
+			claudeAccount = claude.Snapshot()
+		}
+		codexAccount := s.codexQuota(r.Context())
+		if codex != nil {
+			live := codex.Snapshot()
+			if len(live.Windows) > 0 || len(codexAccount.Windows) == 0 {
+				codexAccount = live
+			} else {
+				codexAccount.Error = live.Error
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"claude": []AccountQuota{claudeAccount}, "codex": []AccountQuota{codexAccount}, "status": importer.Status()})
+	})
+	mux.HandleFunc("/api/quotas/refresh", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Use POST", 405)
+			return
+		}
+		service := claude
+		switch r.URL.Query().Get("provider") {
+		case "", "claude":
+		case "codex":
+			service = codex
+		default:
+			http.Error(w, "Unknown quota provider", 400)
+			return
+		}
+		if service == nil {
+			http.Error(w, "Account quota collection is not configured", 503)
+			return
+		}
+		service.Refresh(r.Context(), true)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(service.Snapshot())
+	})
 	web, _ := fs.Sub(assets, "web")
 	mux.Handle("/", http.FileServer(http.FS(web)))
 	mux.HandleFunc("/api/summary", func(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +137,7 @@ func Handler(s *Store, importer *Importer, addr string) http.Handler {
 	})
 	_, port, _ := net.SplitHostPort(addr)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !(r.Method == http.MethodPost && r.URL.Path == "/api/quotas/refresh") {
 			http.Error(w, "Read-only endpoint", 405)
 			return
 		}

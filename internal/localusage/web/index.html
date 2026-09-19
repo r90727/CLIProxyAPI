@@ -1,12 +1,54 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>T3 · Token usage</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
-<body><aside><div class="brand"><span class="mark">T3</span><div>Usage Console<small>CLIProxyAPI · Local</small></div></div><div class="nav-label">OBSERVE</div><a class="active" href="/">◫ &nbsp; Token usage</a><div class="aside-bottom"><span class="dot"></span> Single-machine ledger<br><small>Stored on this computer</small></div></aside>
-<main><header><div><div class="eyebrow">YOUR CODING ACTIVITY</div><h1>Token usage</h1><p>Codex and Claude sessions, connected to T3 Code.</p></div><a id="export" class="button" href="/api/export.csv">↓ Export CSV</a></header>
-<div class="toolbar"><label>Source<select id="source"><option value="t3">T3 sessions</option><option value="proxy">Proxy traffic</option></select></label><label>From (UTC)<input id="from" type="date"></label><label>To (UTC)<input id="to" type="date"></label><button id="reset">All time</button><span id="status" role="status">Connecting…</span></div>
-<div id="error" role="alert" hidden></div>
-<section class="cards" aria-label="Token totals"><article><small>Total tokens</small><strong id="total">—</strong><span id="records">Waiting for usage</span></article><article><small>Input</small><strong id="input">—</strong><span>Includes cache reads and writes</span></article><article><small>Output</small><strong id="output">—</strong><span id="reasoning">Includes reasoning</span></article><article><small>Cache reads</small><strong id="cached">—</strong><span id="cache-ratio">Of input tokens</span></article></section>
-<section class="panel" id="quota-panel" hidden><div class="panel-heading"><h2>Codex quota snapshot</h2><small id="quota-at"></small></div><div id="quotas"></div><p class="note">Latest provider-reported limit. This can include activity outside T3; token totals do not predict subscription limits.</p></section>
-<div class="grid"><section class="panel"><div class="panel-heading"><h2>Daily activity</h2><small>UTC · last 30 active days</small></div><div id="chart" class="chart"></div><div id="chart-labels"></div></section><section class="panel"><div class="panel-heading"><h2>By provider</h2><small>Recorded usage</small></div><div id="providers"></div><p class="note">Cache and reasoning are breakdowns of the totals, not additional tokens.</p></section></div>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>CPAMC · Quota Management</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
+<body>
+<svg class="icon-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+<symbol id="grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+<symbol id="bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 10-13h-8z"/></symbol>
+<symbol id="network" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="16" y="16" width="6" height="6" rx="1"/><path d="M12 8v4H5v4m7-4h7v4"/></symbol>
+<symbol id="shield" viewBox="0 0 24 24"><path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6z"/><path d="m8 12 3 3 5-6"/></symbol>
+<symbol id="gauge" viewBox="0 0 24 24"><path d="M4 19a9 9 0 1 1 16 0M12 12l5-5"/><circle cx="12" cy="12" r="1"/></symbol>
+<symbol id="log" viewBox="0 0 24 24"><path d="M6 3h14v18H6zM3 3v14h3m4-10h6m-6 5h6m-6 5h6"/></symbol>
+<symbol id="settings" viewBox="0 0 24 24"><path d="M3 6h5m5 0h8M3 12h11m5 0h2M3 18h3m5 0h10M8 3v6m6 0v6M6 15v6"/></symbol>
+<symbol id="refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1"/></symbol>
+<symbol id="chevron" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+</defs></svg>
+<aside id="sidebar">
+<a class="brand" href="#quota" aria-label="CLI Proxy API Console home"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="mark-gradient" x2="1" y2="1"><stop stop-color="#b9c957"/><stop offset=".5" stop-color="#78c5ab"/><stop offset="1" stop-color="#25a5c9"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="4" fill="url(#mark-gradient)"/><path d="m16 3 13 12-12 15L3 17z" fill="#e6d967"/><path d="m16 3 1 27L3 17z" fill="#86bca0"/><path d="m16 3 1 27m-14-13 26-2M8 10l14 12" stroke="#547164" stroke-width=".8" fill="none"/></svg><span><strong>CPAMC</strong><small>CLI Proxy API Console</small></span></a>
+<nav aria-label="Main navigation">
+<div class="nav-group">OPERATE</div>
+<a href="#dashboard" data-view="dashboard"><svg class="icon"><use href="#grid"/></svg><span>Dashboard</span></a>
+<a href="#quick-start" data-view="quick-start"><svg class="icon"><use href="#bolt"/></svg><span>Quick Start</span></a>
+<div class="nav-group">GATEWAY</div>
+<a href="#providers" data-view="providers"><svg class="icon"><use href="#network"/></svg><span>AI Providers</span></a>
+<a href="#auth-files" data-view="auth-files"><svg class="icon"><use href="#shield"/></svg><span>Auth Files</span><small id="account-count" class="badge">2</small></a>
+<div class="nav-group">OBSERVE</div>
+<a href="#quota" data-view="quota" class="active"><svg class="icon"><use href="#gauge"/></svg><span>Quota Management</span></a>
+<a href="#usage" data-view="usage"><svg class="icon"><use href="#log"/></svg><span>Token Usage</span></a>
+<div class="nav-group">CONTROL</div>
+<a href="#config" data-view="config"><svg class="icon"><use href="#settings"/></svg><span>Config Panel</span></a>
+</nav>
+<button class="collapse" id="collapse" aria-label="Collapse sidebar"><svg class="icon"><use href="#chevron"/></svg></button>
+<div class="sidebar-foot"><span class="connection-dot"></span><span>Local instance</span><small>127.0.0.1:8318</small></div>
+</aside>
+<main>
+<div id="error" class="error-banner" role="alert" hidden></div>
+<section id="view-quota" aria-label="Quota Management">
+<div class="quota-toolbar"><span id="quota-status" role="status">Loading quota…</span><div class="display-mode" aria-label="Quota display"><button id="used-mode" class="selected" aria-pressed="true">Used</button><button id="remaining-mode" aria-pressed="false">Remaining</button></div></div>
+<section class="provider-section" aria-labelledby="claude-heading"><h2 id="claude-heading">Claude <span id="claude-count">1</span></h2><div id="claude-accounts"></div></section>
+<section class="provider-section" aria-labelledby="codex-heading"><h2 id="codex-heading">Codex <span id="codex-count">1</span></h2><div id="codex-accounts"></div></section>
+<div class="quota-footnote"><span class="connection-dot"></span><span>Account limits include activity outside T3 Code. Quota refreshes every 5 minutes. Reset times are shown in your local time zone.</span></div>
+</section>
+<section id="view-usage" hidden>
+<div class="page-heading"><h1 id="usage-heading">Dashboard</h1><a id="export" class="button" href="/api/export.csv">Export CSV</a></div>
+<div class="toolbar"><label>Source<select id="source"><option value="t3">T3 sessions</option><option value="proxy">Proxy traffic</option></select></label><label>From (UTC)<input id="from" type="date"></label><label>To (UTC)<input id="to" type="date"></label><button id="reset" class="button">All time</button><span id="status" role="status"></span></div>
+<div class="cards"><article><small>Total tokens</small><strong id="total">—</strong><span id="records"></span></article><article><small>Input</small><strong id="input">—</strong><span>Includes cache reads and writes</span></article><article><small>Output</small><strong id="output">—</strong><span id="reasoning"></span></article><article><small>Cache reads</small><strong id="cached">—</strong><span id="cache-ratio"></span></article></div>
+<div class="grid"><section class="panel"><div class="panel-heading"><h2>Daily activity</h2><small>UTC · last 30 active days</small></div><div id="chart" class="chart"></div><div id="chart-labels"></div></section><section class="panel"><h2>By provider</h2><div id="providers"></div></section></div>
 <section class="panel"><div class="panel-heading"><h2>Models</h2><small>Exact token counts</small></div><div class="table-wrap"><table><thead><tr><th>Model</th><th>Input</th><th>Output</th><th>Cache read</th><th>Cache write</th><th>Reasoning</th><th>Total</th></tr></thead><tbody id="models"></tbody></table></div></section>
-<div class="grid"><section class="panel"><div class="panel-heading"><h2>Projects</h2></div><div id="projects"></div></section><section class="panel"><div class="panel-heading"><h2>Threads</h2></div><div id="threads"></div></section></div>
-<footer>Refreshes every 10 seconds. Session and proxy views are kept separate to prevent overlap. Imported history depends on the session logs retained on this computer.</footer></main></body></html>
+<div class="grid"><section class="panel"><h2>Projects</h2><div id="projects"></div></section><section class="panel"><h2>Threads</h2><div id="threads"></div></section></div>
+<p class="note">Cache and reasoning are included in the totals. Session and proxy views stay separate to prevent double counting.</p>
+</section>
+<section id="view-accounts" hidden><div class="page-heading"><h1 id="accounts-heading">AI Providers</h1></div><p class="note">Accounts detected on this computer. Credentials stay in their original CLI files.</p><div id="account-details"></div></section>
+<section id="view-help" hidden><div class="page-heading"><h1>Quick Start</h1></div><div class="help-content"><h2>Watch your plan limits</h2><p>Quota Management shows Claude and Codex quota windows. Bars show the percentage used by default. Switch to Remaining to see available quota.</p><h2>Connect Claude</h2><p>The console reads your existing Claude Code login. If authentication is needed, run <code>claude auth login</code> on this computer, then click Refresh quota.</p><h2>Connect Codex</h2><p>The console reads your existing Codex login to show quota windows and manual-reset availability. If the account endpoint is unavailable, retained session reports provide a fallback.</p><h2>Review token usage</h2><p>Open Token Usage for counts by model, project, thread, and day. Export CSV downloads exact counts for the selected dates.</p></div></section>
+<section id="view-config" hidden><div class="page-heading"><h1>Config Panel</h1><span class="subtle">Current configuration</span></div><dl class="config-list"><dt>Access</dt><dd>This computer only · localhost</dd><dt>Session usage refresh</dt><dd>Every 10 seconds</dd><dt>Account quota refresh</dt><dd>Every 5 minutes, with backoff when rate limited</dd><dt>Codex quota source</dt><dd>Account quota endpoint, with session-report fallback</dd><dt>Quota display</dt><dd>Used by default; switch to Remaining on the quota page</dd><dt>Token accounting</dt><dd>Cache is included in input. Reasoning is included in output.</dd><dt>History</dt><dd>Persisted locally in SQLite across restarts</dd><dt>Startup</dt><dd>Managed by the Windows installer</dd></dl></section>
+</main></body></html>

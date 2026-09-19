@@ -10,6 +10,6 @@ if (Test-Path -LiteralPath $pidFile) {
         exit 0
     }
 }
-$process = Start-Process -FilePath $binary -ArgumentList @('--db', ('"' + (Join-Path $DataDir 'usage.sqlite') + '"')) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $DataDir 'stdout.log') -RedirectStandardError (Join-Path $DataDir 'stderr.log')
+$process = Start-Process -FilePath $binary -ArgumentList @('--db', ('"' + (Join-Path $DataDir 'usage.sqlite') + '"')) -WorkingDirectory $DataDir -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $DataDir 'stdout.log') -RedirectStandardError (Join-Path $DataDir 'stderr.log')
 @{pid=$process.Id; started=$process.StartTime.ToUniversalTime().ToString('o')} | ConvertTo-Json | Set-Content -LiteralPath $pidFile -Encoding UTF8
 Write-Output 'T3 usage started: http://127.0.0.1:8318'

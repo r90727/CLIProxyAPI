@@ -17,9 +17,19 @@ Use `-NoAutoStart` to omit the login shortcut. The dashboard remains loopback-on
 
 The dashboard reports input, output, cache reads, cache writes, reasoning, and total
 tokens by model, provider, UTC day, T3 project, and thread. It refreshes every ten
-seconds, supports date ranges, and exports exact counts as CSV. The Codex quota
-panel shows the latest provider-reported snapshot and its timestamp; it is not an
-estimate derived from token totals. An old snapshot stays visibly dated.
+seconds, supports date ranges, and exports exact counts as CSV. Quota Management
+opens by default, with compact Claude and Codex account rows. Bars show **Used**
+by default; switch to Remaining to see available quota. Both providers show
+scheduled reset times beneath their bars. Codex also shows its reported manual-reset
+allowance, including a real zero when the account has no resets available.
+
+Claude quota includes the 5-hour, weekly, and model-specific weekly windows returned
+by its account usage endpoint (including Fable). Codex uses its account usage endpoint
+for quota windows and manual-reset credits, with local session snapshots as fallback.
+These are provider-reported account limits, not estimates derived from token counts.
+They include activity outside T3 Code and refresh every five minutes. Manual refresh
+has a 30-second cooldown. Rate-limited requests back off, and errors retain clearly
+dated last-known values. No manual reset is consumed by reading or refreshing quota.
 
 ## How T3 integration works
 
@@ -27,6 +37,10 @@ estimate derived from token totals. An old snapshot stays visibly dated.
 resume cursors to Codex and Claude session logs. Only token fields, session IDs,
 model names, timestamps, project/thread labels, and quota windows enter the ledger.
 It does not copy prompts, completions, auth files, API keys, or access tokens.
+Account quota checks read the existing Claude and Codex CLI logins in memory and send
+them only to their respective provider's quota endpoint. Credentials are never
+returned to the browser, written to the ledger, refreshed, or rewritten. Account
+emails are masked before they are cached or displayed. Redirects are not followed.
 
 Codex cumulative usage becomes per-event deltas. Repeated notifications are ignored.
 Claude usage is keyed by message ID, so repeated streaming entries update a record
@@ -81,7 +95,11 @@ Defaults:
 - Logs: `%USERPROFILE%\.t3-usage\stderr.log`
 
 The CLI accepts `--t3-db`, `--codex-dir`, `--claude-dir`, `--db`, `--port`,
-`--interval`, and `--once` for custom installations. For example:
+`--interval`, and `--once` for custom installations. Account quota credential paths
+can be overridden with `--claude-credentials`, `--claude-profile`, and
+`--codex-credentials`. By default these are `~/.claude/.credentials.json`,
+`~/.claude.json`, and `~/.codex/auth.json`. Quota endpoint schemas are provider-owned;
+unavailable fields remain unknown rather than being displayed as zero. For example:
 
 ```powershell
 .\bin\t3-usage.exe --once --db .\usage.sqlite

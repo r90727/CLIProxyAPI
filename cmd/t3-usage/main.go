@@ -31,7 +31,10 @@ func run() error {
 	db := flag.String("db", filepath.Join(home, ".t3-usage", "usage.sqlite"), "Persistent usage ledger")
 	t3 := flag.String("t3-db", filepath.Join(home, ".t3", "userdata", "state.sqlite"), "T3 database, opened read-only")
 	codex := flag.String("codex-dir", filepath.Join(home, ".codex", "sessions"), "Codex session logs")
+	codexCredentials := flag.String("codex-credentials", filepath.Join(home, ".codex", "auth.json"), "Existing Codex CLI credentials, read-only")
 	claude := flag.String("claude-dir", filepath.Join(home, ".claude", "projects"), "Claude session logs")
+	claudeCredentials := flag.String("claude-credentials", filepath.Join(home, ".claude", ".credentials.json"), "Existing Claude CLI credentials, read-only")
+	claudeProfile := flag.String("claude-profile", filepath.Join(home, ".claude.json"), "Claude CLI profile for masked account label")
 	port := flag.Int("port", 8318, "Loopback dashboard port")
 	interval := flag.Duration("interval", 10*time.Second, "Import interval")
 	once := flag.Bool("once", false, "Import once and exit")
@@ -56,6 +59,10 @@ func run() error {
 	if *once {
 		return nil
 	}
+	claudeQuotas := localusage.NewClaudeQuotaService(s, *claudeCredentials, *claudeProfile)
+	go claudeQuotas.Run(ctx)
+	codexQuotas := localusage.NewCodexQuotaService(s, *codexCredentials)
+	go codexQuotas.Run(ctx)
 	addr, err := localusage.LoopbackAddress(*port)
 	if err != nil {
 		return err
@@ -64,7 +71,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Addr: addr, Handler: localusage.Handler(s, importer, addr)}
+	server := &http.Server{Addr: addr, Handler: localusage.Handler(s, importer, addr, claudeQuotas, codexQuotas)}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(listener) }()
 	log.Infof("T3 token usage dashboard: http://%s", addr)

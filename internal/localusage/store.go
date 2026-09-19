@@ -65,7 +65,8 @@ CREATE TABLE IF NOT EXISTS usage_events (
 CREATE INDEX IF NOT EXISTS usage_time ON usage_events(at,source);
 CREATE TABLE IF NOT EXISTS sessions (session TEXT PRIMARY KEY, thread TEXT NOT NULL, title TEXT NOT NULL, project TEXT NOT NULL, model TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS import_files (path TEXT PRIMARY KEY, offset INTEGER NOT NULL, state TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS quotas (session TEXT PRIMARY KEY, at TEXT NOT NULL, payload TEXT NOT NULL);`)
+CREATE TABLE IF NOT EXISTS quotas (session TEXT PRIMARY KEY, at TEXT NOT NULL, payload TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS account_quotas (provider TEXT PRIMARY KEY, payload TEXT NOT NULL);`)
 	if err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("initialize usage database: %w", err)
